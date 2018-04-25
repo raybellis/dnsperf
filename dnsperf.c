@@ -997,12 +997,13 @@ static void set_thread_affinity(pthread_t thread, unsigned int num)
 {
    cpu_set_t cpus;
    unsigned int n, count;
+   int i;
 
    sched_getaffinity(0, sizeof(cpus), &cpus);
    count = CPU_COUNT(&cpus);
    n = num % count;
 
-   for (int i = 0; n >= 0; ++i) {
+   for (i = 0; n >= 0; ++i) {
        if (CPU_ISSET(i, &cpus)) {
            if (n-- == 0) {
                CPU_ZERO(&cpus);
