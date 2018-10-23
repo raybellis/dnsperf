@@ -90,6 +90,9 @@ typedef struct {
     isc_uint64_t stats_interval;
     isc_boolean_t updates;
     isc_boolean_t verbose;
+#ifdef __linux__
+    isc_boolean_t affinity;
+#endif
 } config_t;
 
 typedef struct {
@@ -449,6 +452,11 @@ setup(int argc, char **argv, config_t *config)
     perf_opt_add('v', perf_opt_boolean, NULL,
                  "verbose: report each query to stdout",
                  NULL, &config->verbose);
+#ifdef __linux__
+    perf_opt_add('A', perf_opt_boolean, NULL,
+                 "set processor affinities",
+                 NULL, &config->affinity);
+#endif
 
     perf_opt_parse(argc, argv);
 
@@ -1016,9 +1024,12 @@ static void set_thread_affinity(pthread_t thread, unsigned int num)
        }
    }
 }
-#define THREAD_AFFINITY(t, n) set_thread_affinity(t, n)
+#define THREAD_AFFINITY(t, c, n) do {       \
+        if (c->affinity)                 \
+            set_thread_affinity(t, n); \
+    } while(0)
 #else
-#define THREAD_AFFINITY(t, n) {}
+#define THREAD_AFFINITY(t, c, n) {}
 #endif
 
 static void
@@ -1078,9 +1089,9 @@ threadinfo_init(unsigned int threadnum,
     tinfo->current_sock = 0;
 
     THREAD(&tinfo->receiver, do_recv, tinfo);
-    THREAD_AFFINITY(tinfo->receiver, threadnum);
+    THREAD_AFFINITY(tinfo->receiver, config, threadnum);
     THREAD(&tinfo->sender, do_send, tinfo);
-    THREAD_AFFINITY(tinfo->sender, threadnum);
+    THREAD_AFFINITY(tinfo->sender, config, threadnum);
 }
 
 static void
@@ -1139,7 +1150,7 @@ main(int argc, char **argv)
         stats_thread.config = &config;
         stats_thread.times = &times;
         THREAD(&stats_thread.sender, do_interval_stats, &stats_thread);
-	THREAD_AFFINITY(stats_thread.sender, config.threads + 1);
+        THREAD_AFFINITY(stats_thread.sender, (&config), config.threads + 1);
     }
 
     times.start_time = get_time();
